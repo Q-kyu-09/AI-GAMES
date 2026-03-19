@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>オセロ完全版</title>
+<style>
+body {
+  font-family: sans-serif;
+  text-align: center;
+  background: #222;
+  color: white;
+}
+ 
+#board {
+  display: grid;
+  grid-template-columns: repeat(8, 50px);
+  gap: 4px;
+  justify-content: center;
+  margin: 20px auto;
+}
+ 
+.cell {
+  width: 50px;
+  height: 50px;
+  background: green;
+  border-radius: 6px;
+  position: relative;
+}
+ 
+.disk {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  position: absolute;
+  top: 5px;
+  left: 5px;
+}
+ 
+.black { background: black; }
+.white { background: white; }
+ 
+.selected {
+  outline: 3px solid yellow;
+}
+</style>
+</head>
+<body>
+ 
+<h1>オセロ</h1>
+ 
+<select id="mode">
+  <option value="cpu">CPU対戦</option>
+  <option value="pvp">2人対戦</option>
+</select>
+ 
+<select id="difficulty">
+  <option value="easy">弱い</option>
+  <option value="normal">普通</option>
+  <option value="hard">強い</option>
+</select>
+ 
+<button onclick="startGame()">開始</button>
+ 
+<p id="status"></p>
+ 
+<div id="board"></div>
+ 
+<script>
+const boardEl = document.getElementById("board");
+const statusEl = document.getElementById("status");
+ 
+let board, currentPlayer, mode, difficulty;
+let selectedX = 0, selectedY = 0;
+ 
+// ===================== 初期化 =====================
+function startGame() {
+  board = Array(8).fill().map(()=>Array(8).fill(null));
+  board[3][3] = board[4][4] = "white";
+  board[3][4] = board[4][3] = "black";
+ 
+  currentPlayer = "black";
+  mode = document.getElementById("mode").value;
+  difficulty = document.getElementById("difficulty").value;
+ 
+  draw();
+}
+ 
+// ===================== 描画 =====================
+function draw() {
+  boardEl.innerHTML = "";
+ 
+  for (let y=0;y<8;y++) {
+    for (let x=0;x<8;x++) {
+      const cell = document.createElement("div");
+      cell.className = "cell";
+ 
+      if (x===selectedX && y===selectedY) {
+        cell.classList.add("selected");
+      }
+ 
+      if (board[y][x]) {
+        const d = document.createElement("div");
+        d.className = "disk " + board[y][x];
+        cell.appendChild(d);
+      }
+ 
+      cell.onclick = ()=>move(x,y);
+      boardEl.appendChild(cell);
+    }
+  }
+ 
+  statusEl.textContent =
+    (currentPlayer==="black"?"黒":"白") + "の番";
+}
+ 
+// ===================== ゲーム処理 =====================
+function move(x,y) {
+  if (!canPlace(x,y,currentPlayer)) return;
+ 
+  place(x,y,currentPlayer);
+  draw();
+  nextTurn();
+}
+ 
+function nextTurn() {
+  currentPlayer = currentPlayer==="black"?"white":"black";
+ 
+  setTimeout(()=>{
+ 
+    if (!hasValidMove(currentPlayer)) {
+      currentPlayer = currentPlayer==="black"?"white":"black";
+ 
+      if (!hasValidMove(currentPlayer)) {
+        endGame();
+        return;
+      }
+ 
+      alert("パス！");
+    }
+ 
+    draw();
+ 
+    if (mode==="cpu" && currentPlayer==="white") {
+      setTimeout(cpuMove, 200);
+    }
+ 
+  }, 200);
+}
+ 
+// ===================== 判定 =====================
+function canPlace(x,y,color) {
+  if (board[y][x]) return false;
+  return getFlips(x,y,color).length > 0;
+}
+ 
+function place(x,y,color) {
+  const flips = getFlips(x,y,color);
+  if (flips.length===0) return;
+ 
+  board[y][x] = color;
+  flips.forEach(([fx,fy])=>{
+    board[fy][fx] = color;
+  });
+}
+ 
+function getFlips(x,y,color) {
+  const enemy = color==="black"?"white":"black";
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+  let result = [];
+ 
+  dirs.forEach(([dx,dy])=>{
+    let nx=x+dx, ny=y+dy;
+    let temp=[];
+    while(nx>=0 && ny>=0 && nx<8 && ny<8 && board[ny][nx]===enemy){
+      temp.push([nx,ny]);
+      nx+=dx; ny+=dy;
+    }
+    if (nx>=0 && ny>=0 && nx<8 && ny<8 && board[ny][nx]===color){
+      result = result.concat(temp);
+    }
+  });
+ 
+  return result;
+}
+ 
+function hasValidMove(color) {
+  for (let y=0;y<8;y++){
+    for (let x=0;x<8;x++){
+      if (canPlace(x,y,color)) return true;
+    }
+  }
+  return false;
+}
+ 
+// ===================== 終了 =====================
+function endGame() {
+  let black = 0, white = 0;
+ 
+  for (let y=0;y<8;y++){
+    for (let x=0;x<8;x++){
+      if (board[y][x]==="black") black++;
+      if (board[y][x]==="white") white++;
+    }
+  }
+ 
+  let result;
+  if (black > white) result = "黒の勝ち！";
+  else if (white > black) result = "白の勝ち！";
+  else result = "引き分け！";
+ 
+  alert(`ゲーム終了\n黒:${black} 白:${white}\n${result}`);
+}
+ 
+// ===================== CPU =====================
+function cpuMove() {
+  let moves = [];
+ 
+  for (let y=0;y<8;y++){
+    for (let x=0;x<8;x++){
+      if (canPlace(x,y,"white")){
+        moves.push({x,y,score:evaluate(x,y)});
+      }
+    }
+  }
+ 
+  if (moves.length===0) {
+    nextTurn();
+    return;
+  }
+ 
+  let choice;
+ 
+  if (difficulty==="easy") {
+    choice = moves[Math.floor(Math.random()*moves.length)];
+  } 
+  else if (difficulty==="normal") {
+    moves.sort((a,b)=>b.score-a.score);
+    choice = moves[0];
+  } 
+  else {
+    moves.sort((a,b)=>b.score-a.score);
+    choice = moves[0];
+    moves.forEach(m=>{
+      if ((m.x===0||m.x===7)&&(m.y===0||m.y===7)) choice = m;
+    });
+  }
+ 
+  move(choice.x, choice.y);
+}
+ 
+function evaluate(x,y){
+  let score = getFlips(x,y,"white").length;
+  if ((x===0||x===7)&&(y===0||y===7)) score+=10;
+  return score;
+}
+ 
+// ===================== 操作 =====================
+document.addEventListener("keydown", e=>{
+  if (e.key==="ArrowUp") selectedY=(selectedY+7)%8;
+  if (e.key==="ArrowDown") selectedY=(selectedY+1)%8;
+  if (e.key==="ArrowLeft") selectedX=(selectedX+7)%8;
+  if (e.key==="ArrowRight") selectedX=(selectedX+1)%8;
+  if (e.key==="Enter") move(selectedX,selectedY);
+  draw();
+});
+ 
+startGame();
+</script>
+ 
+</body>
+</html>
+ 
